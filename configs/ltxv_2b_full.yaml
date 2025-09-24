@@ -79,7 +79,6 @@ hub:
 wandb:
   enabled: true  # Set to true to enable W&B logging
   project: "ltxv-trainer"
-  # entity: medal-tv  # Your W&B username or team
   tags: []
   log_validation_videos: true
 
