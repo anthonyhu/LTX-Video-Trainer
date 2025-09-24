@@ -246,7 +246,7 @@ def compute_captions_embeddings(
         TimeRemainingColumn,
     )
 
-    console = Console()
+    console = Console(no_color=True)
 
     # Create dataset
     dataset = CaptionsDataset(

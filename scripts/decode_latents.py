@@ -33,7 +33,7 @@ from ltxv_trainer.ltxv_utils import decode_video
 from ltxv_trainer.model_loader import LtxvModelVersion, load_vae
 
 disable_progress_bar()
-console = Console()
+console = Console(no_color=True)
 app = typer.Typer(
     pretty_exceptions_enable=False,
     no_args_is_help=True,

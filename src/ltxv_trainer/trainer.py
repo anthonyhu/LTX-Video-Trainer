@@ -203,6 +203,8 @@ class LtxvTrainer:
 
             if cfg.validation.interval and IS_MAIN_PROCESS and not cfg.validation.skip_initial_validation:
                 sampled_videos_paths = self._sample_videos(sample_progress)
+                if sampled_videos_paths and self._config.wandb.log_validation_videos:
+                    self._log_validation_videos(sampled_videos_paths, cfg.validation.prompts)
             self._accelerator.wait_for_everyone()
 
             for step in range(cfg.optimization.steps * cfg.optimization.gradient_accumulation_steps):
@@ -875,7 +877,7 @@ class LtxvTrainer:
         wandb_config = self._config.wandb
         run = wandb.init(
             project=wandb_config.project,
-            entity=wandb_config.entity,
+            #entity=wandb_config.entity,
             name=Path(self._config.output_dir).name,
             tags=wandb_config.tags,
             config=self._config.model_dump(),

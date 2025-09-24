@@ -360,7 +360,7 @@ def compute_video_latents(
     )
     from torch.utils.data import DataLoader
 
-    console = Console()
+    console = Console(no_color=True)
 
     # Create dataset
     dataset = MediaDataset(
@@ -383,7 +383,7 @@ def compute_video_latents(
         vae.enable_tiling()
 
     # Create dataloader
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     # Process batches
     with Progress(
@@ -395,6 +395,7 @@ def compute_video_latents(
         TimeElapsedColumn(),
         TimeRemainingColumn(),
         console=console,
+        refresh_per_second=2,
     ) as progress:
         task = progress.add_task("Processing videos", total=len(dataloader))
 

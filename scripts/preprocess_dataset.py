@@ -16,7 +16,7 @@ The dataset must be a CSV, JSON, or JSONL file with columns for captions and vid
 from pathlib import Path
 
 import typer
-from decode_latents import LatentsDecoder
+from scripts.decode_latents import LatentsDecoder
 from rich.console import Console
 
 from ltxv_trainer import logger
@@ -24,7 +24,7 @@ from ltxv_trainer.model_loader import LtxvModelVersion
 from scripts.process_captions import compute_captions_embeddings
 from scripts.process_videos import compute_video_latents, parse_resolution_buckets
 
-console = Console()
+console = Console(no_color=True)
 app = typer.Typer(
     pretty_exceptions_enable=False,
     no_args_is_help=True,

@@ -169,11 +169,12 @@ def caption_media(
 
             try:
                 # Generate caption for the media
-                caption = captioner.caption(
-                    path=media_file,
-                    fps=fps,
-                    clean_caption=clean_caption,
-                )
+                # caption = captioner.caption(
+                #     path=media_file,
+                #     fps=fps,
+                #     clean_caption=clean_caption,
+                # )
+                caption = "no caption"
 
                 # Convert absolute path to relative path (relative to the output file's directory)
                 rel_path = str(media_file.resolve().relative_to(base_dir))
@@ -486,20 +487,20 @@ def main(  # noqa: PLR0913
     console.print(f"Output will be saved to [bold blue]{output}[/]")
 
     # Initialize captioning model
-    with console.status("Loading captioning model...", spinner="dots"):
-        captioner = create_captioner(
-            captioner_type=captioner_type,
-            device=device,
-            use_8bit=use_8bit,
-            vlm_instruction=instruction,
-        )
-        console.print("[bold green]✓[/] Captioning model loaded successfully")
+    # with console.status("Loading captioning model...", spinner="dots"):
+    #     captioner = create_captioner(
+    #         captioner_type=captioner_type,
+    #         device=device,
+    #         use_8bit=use_8bit,
+    #         vlm_instruction=instruction,
+    #     )
+    #     console.print("[bold green]✓[/] Captioning model loaded successfully")
 
     # Caption media files
     caption_media(
         input_path=input_path,
         output_path=output,
-        captioner=captioner,
+        captioner=None,
         extensions=ext_list,
         recursive=recursive,
         fps=fps,

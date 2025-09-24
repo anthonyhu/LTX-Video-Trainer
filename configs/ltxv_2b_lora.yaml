@@ -8,8 +8,8 @@ model:
 
 # LoRA configuration
 lora:
-  rank: 32
-  alpha: 32
+  rank: 128
+  alpha: 128
   dropout: 0.0
   target_modules:
     - "to_k"
@@ -20,14 +20,14 @@ lora:
 # Conditioning configuration
 conditioning:
   mode: "none" # Options: "none", "reference_video"
-  first_frame_conditioning_p: 0.1
+  first_frame_conditioning_p: 1.0
 
 # Optimization configuration
 optimization:
   learning_rate: 2e-4
-  steps: 1500
-  batch_size: 1
-  gradient_accumulation_steps: 1
+  steps: 10000
+  batch_size: 8
+  gradient_accumulation_steps: 16
   max_grad_norm: 1.0
   optimizer_type: "adamw" # Options: "adamw" or "adamw8bit"
   scheduler_type: "linear" # Options: "constant", "linear", "cosine", "cosine_with_restarts", "polynomial"
@@ -44,27 +44,33 @@ acceleration:
 
 # Data configuration
 data:
-  preprocessed_data_root: "/path/to/preprocessed/data"
-  num_dataloader_workers: 2
+  preprocessed_data_root: "/mnt/home/anthony/datasets/magictime"
+  num_dataloader_workers: 8
 
 # Validation configuration
 validation:
   prompts:
-    - "a professional portrait video of a person with blurry bokeh background"
-    - "a video of a person wearing a nice suit"
+    - "no caption"
+    - "no caption"
+    - "no caption"
+    - "no caption"
+  images:
+    - /mnt/home/anthony/datasets/magictime/validation/magictime_1dGiOGpUczk_0012.png
+    - /mnt/home/anthony/datasets/magictime/validation/magictime_2OSt5VAqR94_0013.png
+    - /mnt/home/anthony/datasets/magictime/validation/magictime_3Ju-AAw2ZDs_0005.png
+    - /mnt/home/anthony/datasets/magictime/validation/magictime_7217455636240502071_0001.png
   negative_prompt: "worst quality, inconsistent motion, blurry, jittery, distorted"
-  images: null # Set to a list of image paths to use first-frame conditioning, or null to disable
-  video_dims: [768, 448, 89] # [width, height, frames]
+  video_dims: [768, 512, 25] # [width, height, frames]
   seed: 42
   inference_steps: 50
-  interval: 100 # Set to null to disable validation
+  interval: 1000 # Set to null to disable validation
   videos_per_prompt: 1
-  guidance_scale: 3.5
+  guidance_scale: 1.0
 
 # Checkpoint configuration
 checkpoints:
-  interval: 250 # Save a checkpoint every N steps, set to null to disable
-  keep_last_n: -1 # Keep only the N most recent checkpoints, set to -1 to keep all
+  interval: 1000 # Save a checkpoint every N steps, set to null to disable
+  keep_last_n: 1 # Keep only the N most recent checkpoints, set to -1 to keep all
 
 # Flow matching configuration
 flow_matching:
@@ -78,12 +84,12 @@ hub:
 
 # W&B configuration
 wandb:
-  enabled: false  # Set to true to enable W&B logging
+  enabled: true  # Set to true to enable W&B logging
   project: "ltxv-trainer"
-  entity: null  # Your W&B username or team
+  #entity: null  # Your W&B username or team
   tags: []
   log_validation_videos: true
 
 # General configuration
 seed: 42
-output_dir: "outputs/ltxv_lora"
+output_dir: "outputs/ltxv_lora_bs128"
