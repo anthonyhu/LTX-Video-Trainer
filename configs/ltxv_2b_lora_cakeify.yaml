@@ -20,12 +20,12 @@ lora:
 # Conditioning configuration
 conditioning:
   mode: "none" # Options: "none", "reference_video"
-  first_frame_conditioning_p: 0.5
+  first_frame_conditioning_p: 1.0
 
 # Optimization configuration
 optimization:
   learning_rate: 2e-4
-  steps: 2000
+  steps: 100
   batch_size: 1
   gradient_accumulation_steps: 1
   max_grad_norm: 1.0
@@ -44,27 +44,33 @@ acceleration:
 
 # Data configuration
 data:
-  preprocessed_data_root: "datasets/Cakeify-Dataset"
+  preprocessed_data_root: "/mnt/home/anthony/datasets/cakeify"
   num_dataloader_workers: 2
 
 # Validation configuration
 validation:
   prompts:
-    - "CAKEIFY a person using a knife to cut a cake shaped like bottle of mouthwash"
-    - "CAKEIFY a person using a knife to cut a cake shaped like potted plant"
-    - "CAKEIFY a person using a knife to cut a cake shaped like a jar of Nutella"
+    - "CAKEIFY a person using a knife to cut a cake shaped like an object"
+    - "CAKEIFY a person using a knife to cut a cake shaped like an object"
+    - "CAKEIFY a person using a knife to cut a cake shaped like an object"
+    - "CAKEIFY a person using a knife to cut a cake shaped like an object"
+  images:
+    - /mnt/home/anthony/datasets/cakeify/validation/00000.png
+    - /mnt/home/anthony/datasets/cakeify/validation/00001.png
+    - /mnt/home/anthony/datasets/cakeify/validation/00002.png
+    - /mnt/home/anthony/datasets/cakeify/validation/00003.png
   negative_prompt: "worst quality, inconsistent motion, blurry, jittery, distorted"
-  video_dims: [576, 576, 121] # [width, height, frames]
+  video_dims: [512, 512, 121] # [width, height, frames]
   seed: 42
-  inference_steps: 50
-  interval: 250 # Set to null to disable validation
+  inference_steps: 10
+  interval: 10 # Set to null to disable validation
   videos_per_prompt: 1
   guidance_scale: 3.5
 
 # Checkpoint configuration
 checkpoints:
-  interval: 250 # Save a checkpoint every N steps, set to null to disable
-  keep_last_n: -1 # Keep only the N most recent checkpoints, set to -1 to keep all
+  interval: 10 # Save a checkpoint every N steps, set to null to disable
+  keep_last_n: 1 # Keep only the N most recent checkpoints, set to -1 to keep all
 
 # Flow matching configuration
 flow_matching:
@@ -78,7 +84,7 @@ hub:
 
 # W&B configuration
 wandb:
-  enabled: false  # Set to true to enable W&B logging
+  enabled: true  # Set to true to enable W&B logging
   project: "ltxv-trainer"
   entity: null  # Your W&B username or team
   tags: []
@@ -86,4 +92,4 @@ wandb:
 
 # General configuration
 seed: 42
-output_dir: "outputs/cakeify_lora"
+output_dir: "outputs/debug_cakeify_lora"

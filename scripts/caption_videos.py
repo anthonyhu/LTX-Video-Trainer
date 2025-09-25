@@ -174,7 +174,7 @@ def caption_media(
                 #     fps=fps,
                 #     clean_caption=clean_caption,
                 # )
-                caption = "no caption"
+                caption = "CAKEIFY a person using a knife to cut a cake shaped like an object"
 
                 # Convert absolute path to relative path (relative to the output file's directory)
                 rel_path = str(media_file.resolve().relative_to(base_dir))

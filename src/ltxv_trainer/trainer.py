@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from unittest.mock import MagicMock
 
+import numpy as np
 import rich
 import torch
 import wandb
@@ -202,9 +203,9 @@ class LtxvTrainer:
             )
 
             if cfg.validation.interval and IS_MAIN_PROCESS and not cfg.validation.skip_initial_validation:
-                sampled_videos_paths = self._sample_videos(sample_progress)
-                if sampled_videos_paths and self._config.wandb.log_validation_videos:
-                    self._log_validation_videos(sampled_videos_paths, cfg.validation.prompts)
+                sampled_videos = self._sample_videos(sample_progress)
+                if len(sampled_videos) > 0 and self._config.wandb.log_validation_videos:
+                    self._log_validation_videos(sampled_videos, cfg.validation.prompts)
             self._accelerator.wait_for_everyone()
 
             for step in range(cfg.optimization.steps * cfg.optimization.gradient_accumulation_steps):
@@ -250,9 +251,9 @@ class LtxvTrainer:
                         and is_optimization_step
                         and IS_MAIN_PROCESS
                     ):
-                        sampled_videos_paths = self._sample_videos(sample_progress)
-                        if sampled_videos_paths and self._config.wandb.log_validation_videos:
-                            self._log_validation_videos(sampled_videos_paths, cfg.validation.prompts)
+                        sampled_videos = self._sample_videos(sample_progress)
+                        if len(sampled_videos) > 0 and self._config.wandb.log_validation_videos:
+                            self._log_validation_videos(sampled_videos, cfg.validation.prompts)
 
                     # Save checkpoint if needed
                     if (
@@ -267,8 +268,8 @@ class LtxvTrainer:
                     self._accelerator.wait_for_everyone()
 
                     # Call step callback if provided
-                    if step_callback and is_optimization_step:
-                        step_callback(self._global_step, cfg.optimization.steps, sampled_videos_paths)
+                    # if step_callback and is_optimization_step:
+                    #     step_callback(self._global_step, cfg.optimization.steps, sampled_videos_paths)
 
                     self._accelerator.wait_for_everyone()
 
@@ -345,23 +346,23 @@ class LtxvTrainer:
         self._accelerator.end_training()
 
         if IS_MAIN_PROCESS:
-            saved_path = self._save_checkpoint()
-            comfy_path = saved_path.parent / f"comfy_{saved_path.name}"
-            convert_checkpoint(
-                input_path=str(saved_path),
-                to_comfy=True,
-                output_path=str(comfy_path),
-            )
+            # saved_path = self._save_checkpoint()
+            # comfy_path = saved_path.parent / f"comfy_{saved_path.name}"
+            # convert_checkpoint(
+            #     input_path=str(saved_path),
+            #     to_comfy=True,
+            #     output_path=str(comfy_path),
+            # )
 
             # Log the training statistics
             self._log_training_stats(stats)
 
             # Upload artifacts to hub if enabled
-            if cfg.hub.push_to_hub:
-                push_to_hub(saved_path, comfy_path, sampled_videos_paths, self._config)
+            # if cfg.hub.push_to_hub:
+            #     push_to_hub(saved_path, comfy_path, sampled_videos_paths, self._config)
 
-            if cfg.hub.push_to_hub:
-                push_to_hub(saved_path, sampled_videos_paths, self._config)
+            # if cfg.hub.push_to_hub:
+            #     push_to_hub(saved_path, sampled_videos_paths, self._config)
 
             # Log final stats to W&B
             if self._wandb_run is not None:
@@ -379,7 +380,7 @@ class LtxvTrainer:
 
         self._accelerator.end_training()
 
-        return comfy_path, stats
+        return None, stats
 
     def _training_step(self, batch: dict[str, dict[str, Tensor]]) -> Tensor:
         """Perform a single training step using the configured strategy."""
@@ -732,6 +733,7 @@ class LtxvTrainer:
         output_dir.mkdir(exist_ok=True, parents=True)
 
         video_paths = []
+        all_videos = []
         i = 0
         for j, prompt in enumerate(self._config.validation.prompts):
             generator = torch.Generator(device=self._accelerator.device).manual_seed(self._config.validation.seed)
@@ -776,7 +778,12 @@ class LtxvTrainer:
                 export_to_video(video, str(video_path), fps=24)
                 video_paths.append(video_path)
                 i += 1
+            all_videos.append(videos[0])
             progress.update(task, advance=1)
+
+        if len(all_videos) > 0:
+            all_videos = np.stack([np.stack([np.array(x) for x in all_videos[i]]) for i in range(len(all_videos))])
+            all_videos = all_videos.transpose((0, 1, 4, 2, 3))  # (B, T, C, H, W)
 
         progress.remove_task(task)
 
@@ -787,7 +794,7 @@ class LtxvTrainer:
 
         rel_outputs_path = output_dir.relative_to(self._config.output_dir)
         logger.info(f"🎥 Validation samples for step {self._global_step} saved in {rel_outputs_path}")
-        return video_paths
+        return all_videos
 
     @staticmethod
     def _log_training_stats(stats: TrainingStats) -> None:
@@ -889,15 +896,15 @@ class LtxvTrainer:
         if self._wandb_run is not None:
             self._wandb_run.log(metrics)
 
-    def _log_validation_videos(self, video_paths: list[Path], prompts: list[str]) -> None:
+    def _log_validation_videos(self, videos: np.array, prompts: list[str]) -> None:
         """Log validation videos to Weights & Biases."""
         if not self._config.wandb.log_validation_videos or self._wandb_run is None:
             return
 
         # Create lists of videos with their captions
         validation_videos = [
-            wandb.Video(str(video_path), caption=prompt, format="mp4")
-            for video_path, prompt in zip(video_paths, prompts, strict=False)
+            wandb.Video(video, caption=prompt, fps=24, format="mp4")
+            for video, prompt in zip(videos, prompts, strict=False)
         ]
 
         # Log all videos at once
