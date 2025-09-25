@@ -80,6 +80,7 @@ StepCallback = Callable[[int, int, list[Path]], None]  # (step, total, list[samp
 
 COMPILE_WARMUP_STEPS = 5
 MEMORY_CHECK_INTERVAL = 200
+DEFAULT_FPS = 20
 
 
 class TrainingStats(BaseModel):
@@ -707,7 +708,6 @@ class LtxvTrainer:
     @torch.compiler.set_stance("force_eager")
     def _sample_videos(self, progress: Progress) -> list[Path] | None:
         """Run validation by generating images from validation prompts."""
-
         self._vae.to(self._accelerator.device)
         # Model is already in the correct device if loaded in 8-bit.
         if not self._config.acceleration.load_text_encoder_in_8bit:
@@ -767,8 +767,9 @@ class LtxvTrainer:
 
             if use_videos:
                 cond_video_path = self._config.validation.videos[j]
-                cond_video, _ = read_video(cond_video_path)
+                cond_video, video_fps = read_video(cond_video_path)
                 pipeline_inputs["video"] = cond_video
+                pipeline_inputs["frame_rate"] = int(video_fps)
 
             # Load and add reference video, if provided
             if self._config.validation.reference_videos is not None:
@@ -778,18 +779,27 @@ class LtxvTrainer:
 
             with autocast(self._accelerator.device.type, dtype=torch.bfloat16):
                 result = pipeline(**pipeline_inputs)
-                videos = result.frames
+                assert len(result.frames) == 1
+                videos = result.frames[0]
+                videos = np.stack([np.array(x) for x in videos])  # (T, H, W, C) uint8
 
-            for video in videos:
-                video_path = output_dir / f"step_{self._global_step:06d}_{i}.mp4"
-                export_to_video(video, str(video_path), fps=24)
-                video_paths.append(video_path)
-                i += 1
-            all_videos.append(videos[0])
+                def add_border(video, context, color=[128, 0, 32]):
+                    color = np.array(color)
+                    video[context:, :4, :] = color
+                    video[context:, -4:, :] = color
+                    video[context:, :, :4] = color
+                    video[context:, :, -4:] = color
+                add_border(videos, context=len(cond_video))
+
+            video_path = output_dir / f"step_{self._global_step:06d}_{i}.mp4"
+            export_to_video(videos, str(video_path), fps=DEFAULT_FPS, quality=9)
+            video_paths.append(video_path)
+            i += 1
+            all_videos.append(videos)
             progress.update(task, advance=1)
 
         if len(all_videos) > 0:
-            all_videos = np.stack([np.stack([np.array(x) for x in all_videos[i]]) for i in range(len(all_videos))])
+            all_videos = np.stack(all_videos)
             all_videos = all_videos.transpose((0, 1, 4, 2, 3))  # (B, T, C, H, W)
 
         progress.remove_task(task)
@@ -910,7 +920,7 @@ class LtxvTrainer:
 
         # Create lists of videos with their captions
         validation_videos = [
-            wandb.Video(video, caption=prompt, fps=24, format="mp4")
+            wandb.Video(video, caption=prompt, fps=DEFAULT_FPS, format="mp4")
             for video, prompt in zip(videos, prompts, strict=False)
         ]
 
