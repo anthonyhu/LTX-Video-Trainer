@@ -138,7 +138,7 @@ class TrainingStrategy(ABC):
             self.conditioning_config.first_frame_conditioning_p > 0
             and random.random() < self.conditioning_config.first_frame_conditioning_p
         ):
-            first_frame_end_idx = height * width
+            first_frame_end_idx = height * width * self.conditioning_config.n_cond_latents
             if first_frame_end_idx < sequence_length:
                 conditioning_mask[:, :first_frame_end_idx] = True
 

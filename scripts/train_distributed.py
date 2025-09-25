@@ -10,7 +10,7 @@ appropriate configuration.
 Basic usage:
     distributed_train.py configs/ltxv_lora_config.yaml
 """
-
+import os
 import subprocess
 from pathlib import Path
 
@@ -32,10 +32,19 @@ from ltxv_trainer import logger
     is_flag=True,
     help="Disable progress bars during training",
 )
+@click.option(
+    "--main_process_port",
+    type=int,
+    default=29505,  # you can use 0 to auto-pick a free port on a single node
+    show_default=True,
+    help="TCP port for distributed communication (Accelerate’s --main_process_port). "
+         "Set to 0 to auto-select a free port on this host.",
+)
 def main(
     config: str,
     num_processes: int | None,
     disable_progress_bars: bool,
+    main_process_port: int,
 ) -> None:
     # Get path to the training script
     script_dir = Path(__file__).parent
@@ -62,8 +71,8 @@ def main(
 
     # Construct the launch arguments
     launch_args = [
-        "--num_processes",
-        str(num_processes),
+        "--num_processes", str(num_processes),
+        "--main_process_port", str(main_process_port),
         training_script,
         *training_args,
     ]

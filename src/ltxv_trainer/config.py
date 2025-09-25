@@ -86,6 +86,12 @@ class ConditioningConfig(ConfigBaseModel):
         le=1.0,
     )
 
+    n_cond_latents: int = Field(
+        default=1,
+        description="Number of past conditioning latents",
+        ge=0,
+    )
+
     reference_latents_dir: str = Field(
         default="ref_latents",
         description="Directory name for latents of reference videos when using reference_video mode",
@@ -206,6 +212,12 @@ class ValidationConfig(ConfigBaseModel):
     images: list[str] | None = Field(
         default=None,
         description="List of image paths to use for validation. "
+        "One image path must be provided for each validation prompt",
+    )
+
+    videos: list[str] | None = Field(
+        default=None,
+        description="List of video paths to use for validation. "
         "One image path must be provided for each validation prompt",
     )
 

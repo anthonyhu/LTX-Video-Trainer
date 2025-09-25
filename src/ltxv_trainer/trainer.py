@@ -714,6 +714,7 @@ class LtxvTrainer:
             self._text_encoder.to(self._accelerator.device)
 
         use_images = self._config.validation.images is not None
+        use_videos = self._config.validation.videos is not None
 
         pipeline = LTXConditionPipeline(
             scheduler=deepcopy(self._scheduler),
@@ -758,11 +759,16 @@ class LtxvTrainer:
             if use_images:
                 image_path = self._config.validation.images[j]
                 image = open_image_as_srgb(image_path)
-                if image.size != (height, width):
+                if image.size != (width, height):
                     # Resize and center crop the image to match the validation video dimensions
                     image = F.resize(image, size=min(width, height))
                     image = F.center_crop(image, output_size=(width, height))
                 pipeline_inputs["image"] = image
+
+            if use_videos:
+                cond_video_path = self._config.validation.videos[j]
+                cond_video, _ = read_video(cond_video_path)
+                pipeline_inputs["video"] = cond_video
 
             # Load and add reference video, if provided
             if self._config.validation.reference_videos is not None:
