@@ -913,5 +913,4 @@ class LtxvTrainer:
             {
                 "validation_videos": validation_videos,
             },
-            step=self._global_step,
         )
