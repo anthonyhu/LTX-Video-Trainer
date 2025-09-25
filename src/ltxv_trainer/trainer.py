@@ -694,6 +694,7 @@ class LtxvTrainer:
         self._accelerator = Accelerator(
             mixed_precision=self._config.acceleration.mixed_precision_mode,
             gradient_accumulation_steps=self._config.optimization.gradient_accumulation_steps,
+            step_scheduler_with_optimizer=False,
         )
 
         # Log information about distributed training

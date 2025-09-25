@@ -25,7 +25,7 @@ conditioning:
 # Optimization configuration
 optimization:
   learning_rate: 2e-4
-  steps: 100
+  steps: 2000
   batch_size: 1
   gradient_accumulation_steps: 1
   max_grad_norm: 1.0
@@ -45,7 +45,7 @@ acceleration:
 # Data configuration
 data:
   preprocessed_data_root: "/mnt/home/anthony/datasets/cakeify"
-  num_dataloader_workers: 2
+  num_dataloader_workers: 8
 
 # Validation configuration
 validation:
@@ -62,14 +62,14 @@ validation:
   negative_prompt: "worst quality, inconsistent motion, blurry, jittery, distorted"
   video_dims: [512, 512, 121] # [width, height, frames]
   seed: 42
-  inference_steps: 10
-  interval: 10 # Set to null to disable validation
+  inference_steps: 50
+  interval: 250 # Set to null to disable validation
   videos_per_prompt: 1
   guidance_scale: 3.5
 
 # Checkpoint configuration
 checkpoints:
-  interval: 10 # Save a checkpoint every N steps, set to null to disable
+  interval: 250 # Save a checkpoint every N steps, set to null to disable
   keep_last_n: 1 # Keep only the N most recent checkpoints, set to -1 to keep all
 
 # Flow matching configuration
@@ -92,4 +92,4 @@ wandb:
 
 # General configuration
 seed: 42
-output_dir: "outputs/debug_cakeify_lora"
+output_dir: "outputs/2b_lora_cakeify_debug"
