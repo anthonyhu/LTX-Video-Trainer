@@ -324,3 +324,10 @@ def _encode_prompt_t5(
     prompt_attention_mask = prompt_attention_mask.view(batch_size, -1)
 
     return {"prompt_embeds": prompt_embeds, "prompt_attention_mask": prompt_attention_mask}
+
+
+class ActionEncoder(torch.nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+        self.action_dropout_token = torch.nn.Parameter(0.02 * torch.randn((dim,)))

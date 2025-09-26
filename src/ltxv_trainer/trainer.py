@@ -53,6 +53,7 @@ from ltxv_trainer.datasets import PrecomputedDataset
 from ltxv_trainer.hf_hub_utils import push_to_hub
 from ltxv_trainer.model_loader import load_ltxv_components
 from ltxv_trainer.ltxv_pipeline import LTXConditionPipeline
+from ltxv_trainer.ltxv_utils import ActionEncoder
 
 from ltxv_trainer.quantization import quantize_model
 from ltxv_trainer.timestep_samplers import SAMPLERS
@@ -111,6 +112,26 @@ class LtxvTrainer:
         self._checkpoint_paths = []
         self._init_wandb()
         self._training_strategy = get_training_strategy(self._config.conditioning)
+
+    def inference(self):
+        device = self._accelerator.device
+        cfg = self._config
+        set_seed(cfg.seed)
+
+        self._transformer.eval()
+        self._action_encoder.eval()
+        self._global_step = 0
+
+        sample_progress = Progress(
+            TextColumn("Sampling validation videos"),
+            MofNCompleteColumn(),
+            BarColumn(bar_width=40, style="blue"),
+            TimeElapsedColumn(),
+            TextColumn("ETA:"),
+            TimeRemainingColumn(compact=True),
+        )
+
+        sampled_videos = self._sample_videos(sample_progress)
 
     def train(  # noqa: PLR0912, PLR0915
         self,
@@ -183,6 +204,7 @@ class LtxvTrainer:
             live = Live(Panel(Group(train_progress, sample_progress)), refresh_per_second=2)
 
         self._transformer.train()
+        self._action_encoder.train()
         self._global_step = 0
 
         # For tracking compilation time
@@ -225,7 +247,7 @@ class LtxvTrainer:
                     actual_training_start = train_start_time
 
                 step_start_time = time.time()
-                with self._accelerator.accumulate(self._transformer):
+                with self._accelerator.accumulate(self._transformer, self._action_encoder):
                     is_optimization_step = (step + 1) % cfg.optimization.gradient_accumulation_steps == 0
                     if is_optimization_step:
                         self._global_step += 1
@@ -385,6 +407,13 @@ class LtxvTrainer:
 
     def _training_step(self, batch: dict[str, dict[str, Tensor]]) -> Tensor:
         """Perform a single training step using the configured strategy."""
+        # Encode action
+        device = batch['latents']['latents'].device
+        batch_size = batch['latents']['latents'].shape[0]
+        num_frames = batch['latents']['num_frames'][0]
+        batch["conditions"]["prompt_embeds"] = self._action_encoder.action_dropout_token.view(1, 1, -1).repeat(batch_size, num_frames, 1)
+        batch["conditions"]["prompt_attention_mask"] = torch.ones((batch_size, num_frames), dtype=torch.bool, device=device)
+
         # Use strategy to prepare the training batch
         training_batch = self._training_strategy.prepare_batch(batch, self._timestep_sampler)
 
@@ -467,9 +496,12 @@ class LtxvTrainer:
             )
 
         # Freeze all models. We later unfreeze the transformer based on training mode.
-        self._text_encoder.requires_grad_(False)
         self._vae.requires_grad_(False)
         self._transformer.requires_grad_(False)
+        if self._text_encoder is not None:
+            self._text_encoder.requires_grad_(False)
+
+        self._action_encoder = ActionEncoder(dim=4096)
 
     # noinspection PyProtectedMember,PyUnresolvedReferences
     def _compile_transformer(self) -> None:
@@ -526,8 +558,12 @@ class LtxvTrainer:
         if not checkpoint_path:
             logger.warning(f"⚠️ Could not find checkpoint at {self._config.model.load_checkpoint}")
             return
+        action_checkpoint_path = checkpoint_path.parent / Path("action_" + checkpoint_path.name)
 
         transformer = self._accelerator.unwrap_model(self._transformer)
+        action_encoder = self._accelerator.unwrap_model(self._action_encoder)
+        action_state_dict = load_file(action_checkpoint_path)
+        action_encoder.load_state_dict(action_state_dict)
 
         logger.info(f"📥 Loading checkpoint from {checkpoint_path}")
         state_dict = load_file(checkpoint_path)
@@ -550,10 +586,12 @@ class LtxvTrainer:
         prepare = self._accelerator.prepare
         self._vae = prepare(self._vae).to("cpu")
         self._transformer = prepare(self._transformer)
-        self._text_encoder = prepare(self._text_encoder)
+        self._action_encoder = prepare(self._action_encoder)
+        if self._text_encoder is not None:
+            self._text_encoder = prepare(self._text_encoder)
 
-        if not self._config.acceleration.load_text_encoder_in_8bit:
-            self._text_encoder = self._text_encoder.to("cpu")
+            if not self._config.acceleration.load_text_encoder_in_8bit:
+                self._text_encoder = self._text_encoder.to("cpu")
 
         # Enable gradient checkpointing if requested
         if self._config.optimization.enable_gradient_checkpointing:
@@ -710,7 +748,7 @@ class LtxvTrainer:
         """Run validation by generating images from validation prompts."""
         self._vae.to(self._accelerator.device)
         # Model is already in the correct device if loaded in 8-bit.
-        if not self._config.acceleration.load_text_encoder_in_8bit:
+        if self._text_encoder is not None and not self._config.acceleration.load_text_encoder_in_8bit:
             self._text_encoder.to(self._accelerator.device)
 
         use_images = self._config.validation.images is not None
@@ -719,9 +757,10 @@ class LtxvTrainer:
         pipeline = LTXConditionPipeline(
             scheduler=deepcopy(self._scheduler),
             vae=self._accelerator.unwrap_model(self._vae),
-            text_encoder=self._accelerator.unwrap_model(self._text_encoder),
+            text_encoder=self._accelerator.unwrap_model(self._text_encoder) if self._text_encoder is not None else None,
             tokenizer=self._tokenizer,
             transformer=self._accelerator.unwrap_model(self._transformer),
+            action_encoder=self._accelerator.unwrap_model(self._action_encoder),
         )
         pipeline.set_progress_bar_config(disable=True)
 
@@ -806,7 +845,7 @@ class LtxvTrainer:
 
         # Move unused components back to CPU.
         self._vae.to("cpu")
-        if not self._config.acceleration.load_text_encoder_in_8bit:
+        if self._text_encoder is not None and not self._config.acceleration.load_text_encoder_in_8bit:
             self._text_encoder.to("cpu")
 
         rel_outputs_path = output_dir.relative_to(self._config.output_dir)
@@ -841,12 +880,17 @@ class LtxvTrainer:
         # Create filename with step number
         prefix = "model" if self._config.model.training_mode == "full" else "lora"
         filename = f"{prefix}_weights_step_{self._global_step:05d}.safetensors"
+        action_filename = f"action_{prefix}_weights_step_{self._global_step:05d}.safetensors"
         saved_weights_path = save_dir / filename
+        action_saved_weights_path = save_dir / action_filename
         rel_saved_weights_path = saved_weights_path.relative_to(self._config.output_dir)
 
         # Get model state dict
-        unwrapped_model = self._accelerator.unwrap_model(self._transformer)
+        unwrapped_action_model = self._accelerator.unwrap_model(self._action_encoder)
+        action_state_dict = unwrapped_action_model.state_dict()
+        save_file(action_state_dict, action_saved_weights_path)
 
+        unwrapped_model = self._accelerator.unwrap_model(self._transformer)
         if self._config.model.training_mode == "full":
             state_dict = unwrapped_model.state_dict()
             save_file(state_dict, saved_weights_path)

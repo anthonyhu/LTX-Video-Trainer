@@ -258,6 +258,7 @@ class LTXConditionPipeline(DiffusionPipeline, FromSingleFileMixin, LTXVideoLoraL
         text_encoder: T5EncoderModel,
         tokenizer: T5TokenizerFast,
         transformer: LTXVideoTransformer3DModel,
+        action_encoder,
     ):
         super().__init__()
 
@@ -267,6 +268,7 @@ class LTXConditionPipeline(DiffusionPipeline, FromSingleFileMixin, LTXVideoLoraL
             tokenizer=tokenizer,
             transformer=transformer,
             scheduler=scheduler,
+            action_encoder=action_encoder,
         )
 
         self.vae_spatial_compression_ratio = (
@@ -999,26 +1001,13 @@ class LTXConditionPipeline(DiffusionPipeline, FromSingleFileMixin, LTXVideoLoraL
             if not isinstance(strength, list):
                 strength = [strength] * num_conditions
 
-        device = self._execution_device
+        device = self.transformer.device
 
         # 3. Prepare text embeddings
-        (
-            prompt_embeds,
-            prompt_attention_mask,
-            negative_prompt_embeds,
-            negative_prompt_attention_mask,
-        ) = self.encode_prompt(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            do_classifier_free_guidance=self.do_classifier_free_guidance,
-            num_videos_per_prompt=num_videos_per_prompt,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
-            prompt_attention_mask=prompt_attention_mask,
-            negative_prompt_attention_mask=negative_prompt_attention_mask,
-            max_sequence_length=max_sequence_length,
-            device=device,
-        )
+        num_latent_frames = 1 + (num_frames - 1) // self.vae.temporal_compression_ratio
+        prompt_embeds = self.action_encoder.action_dropout_token.view(1, 1, -1).repeat(batch_size, num_latent_frames, 1).to(torch.bfloat16)
+        prompt_attention_mask = torch.ones((batch_size, num_latent_frames), dtype=torch.bool, device=device)
+
         if self.do_classifier_free_guidance:
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             prompt_attention_mask = torch.cat([negative_prompt_attention_mask, prompt_attention_mask], dim=0)

@@ -91,8 +91,8 @@ class LtxvModelComponents(BaseModel):
     """Container for all LTXV model components."""
 
     scheduler: FlowMatchEulerDiscreteScheduler
-    tokenizer: T5Tokenizer
-    text_encoder: T5EncoderModel
+    tokenizer: T5Tokenizer | None
+    text_encoder: T5EncoderModel | None
     vae: AutoencoderKLLTXVideo
     transformer: LTXVideoTransformer3DModel
 
@@ -299,8 +299,8 @@ def load_ltxv_components(
 
     return LtxvModelComponents(
         scheduler=load_scheduler(),
-        tokenizer=load_tokenizer(),
-        text_encoder=load_text_encoder(load_in_8bit=load_text_encoder_in_8bit),
+        tokenizer=None,
+        text_encoder=None,
         vae=load_vae(model_source, dtype=vae_dtype),
         transformer=load_transformer(model_source, dtype=transformer_dtype),
     )
