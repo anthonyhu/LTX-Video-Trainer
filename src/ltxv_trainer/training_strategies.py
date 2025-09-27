@@ -20,7 +20,7 @@ from ltxv_trainer.config import ConditioningConfig
 from ltxv_trainer.ltxv_utils import get_rope_scale_factors, prepare_video_coordinates
 from ltxv_trainer.timestep_samplers import TimestepSampler
 
-DEFAULT_FPS = 24  # Default frames per second for video missing in the FPS metadata
+DEFAULT_FPS = 20  # Default frames per second for video missing in the FPS metadata
 
 
 class TrainingBatch(BaseModel):

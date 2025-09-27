@@ -29,6 +29,8 @@ class LtxvModelVersion(str, Enum):
     LTXV_2B_096_DISTILLED = "LTXV_2B_0.9.6_DISTILLED"
     LTXV_13B_097_DEV = "LTXV_13B_097_DEV"
     LTXV_13B_097_DISTILLED = "LTXV_13B_097_DISTILLED"
+    LTXV_2B_098_DISTILLED = "LTXV_2B_098_DISTILLED"
+    LTXV_13B_098_DISTILLED = "LTXV_13B_098_DISTILLED"
 
     def __str__(self) -> str:
         """Return the version string."""
@@ -77,6 +79,10 @@ class LtxvModelVersion(str, Enum):
                 return "https://huggingface.co/Lightricks/LTX-Video/blob/main/ltxv-13b-0.9.7-dev.safetensors"
             case LtxvModelVersion.LTXV_13B_097_DISTILLED:
                 return "https://huggingface.co/Lightricks/LTX-Video/blob/main/ltxv-13b-0.9.7-distilled.safetensors"
+            case LtxvModelVersion.LTXV_2B_098_DISTILLED:
+                return "https://huggingface.co/Lightricks/LTX-Video/blob/main/ltxv-2b-0.9.8-distilled.safetensors"
+            case LtxvModelVersion.LTXV_13B_098_DISTILLED:
+                return "https://huggingface.co/Lightricks/LTX-Video/blob/main/ltxv-13b-0.9.8-distilled.safetensors"
         raise ValueError(f"Unknown version: {self}")
 
 
@@ -174,6 +180,8 @@ def load_vae(
             LtxvModelVersion.LTXV_2B_096_DISTILLED,
             LtxvModelVersion.LTXV_13B_097_DEV,
             LtxvModelVersion.LTXV_13B_097_DISTILLED,
+            LtxvModelVersion.LTXV_2B_098_DISTILLED,
+            LtxvModelVersion.LTXV_13B_098_DISTILLED,
         ):
             return AutoencoderKLLTXVideo.from_pretrained(
                 LtxvModelVersion.LTXV_2B_095.hf_repo,
@@ -238,6 +246,7 @@ def load_transformer(
         if source in (
             LtxvModelVersion.LTXV_13B_097_DEV,
             LtxvModelVersion.LTXV_13B_097_DISTILLED,
+            LtxvModelVersion.LTXV_13B_098_DISTILLED,
         ):
             return _load_ltxv_13b_transformer(source.safetensors_url, dtype=dtype)
 

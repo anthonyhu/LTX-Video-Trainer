@@ -62,17 +62,17 @@ def preprocess_dataset(  # noqa: PLR0913
         logger.info(f'LoRA trigger word "{id_token}" will be prepended to all captions')
 
     # Process captions using the dedicated function
-    compute_captions_embeddings(
-        dataset_file=dataset_file,
-        output_dir=str(conditions_dir),
-        caption_column=caption_column,
-        media_column=video_column,
-        id_token=id_token,
-        remove_llm_prefixes=remove_llm_prefixes,
-        batch_size=batch_size,
-        device=device,
-        load_text_encoder_in_8bit=load_text_encoder_in_8bit,
-    )
+    # compute_captions_embeddings(
+    #     dataset_file=dataset_file,
+    #     output_dir=str(conditions_dir),
+    #     caption_column=caption_column,
+    #     media_column=video_column,
+    #     id_token=id_token,
+    #     remove_llm_prefixes=remove_llm_prefixes,
+    #     batch_size=batch_size,
+    #     device=device,
+    #     load_text_encoder_in_8bit=load_text_encoder_in_8bit,
+    # )
 
     # Process videos using the dedicated function
     compute_video_latents(

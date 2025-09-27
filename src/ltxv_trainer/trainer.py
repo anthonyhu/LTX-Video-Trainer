@@ -4,6 +4,7 @@ import warnings
 from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial
+import math
 from pathlib import Path
 from typing import Callable, Optional
 from unittest.mock import MagicMock
@@ -39,6 +40,7 @@ from torch.optim.lr_scheduler import (
     CosineAnnealingLR,
     CosineAnnealingWarmRestarts,
     LinearLR,
+    _LRScheduler,
     LRScheduler,
     PolynomialLR,
     StepLR,
@@ -95,6 +97,38 @@ class TrainingStats(BaseModel):
     peak_gpu_memory_gb: float
     global_batch_size: int
     num_processes: int
+
+
+class WarmupConstantCosineDecayLR(_LRScheduler):
+    def __init__(self, optimizer, warmup_steps, constant_steps, decay_steps, min_lr, last_epoch=-1):
+        self.warmup_steps = warmup_steps
+        self.constant_steps = constant_steps
+        self.decay_steps = decay_steps
+
+        self.min_lr = min_lr
+
+        assert self.warmup_steps >= 0
+        assert self.constant_steps >= 0
+        assert self.decay_steps >= 0
+        assert self.min_lr >= 0
+
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        step = self.last_epoch + 2
+
+        if step < self.warmup_steps:
+            return [base_lr * step / self.warmup_steps for base_lr in self.base_lrs]
+        elif step >= self.warmup_steps and step < self.warmup_steps + self.constant_steps:
+            return self.base_lrs
+        elif step >= self.warmup_steps + self.constant_steps and step < self.warmup_steps + self.constant_steps + self.decay_steps:
+            decay_step = step - self.warmup_steps - self.constant_steps
+            cosine_decay = 0.5 * (1 + math.cos(math.pi * decay_step / self.decay_steps))
+            return [self.min_lr + (base_lr - self.min_lr) * cosine_decay for base_lr in self.base_lrs]
+        elif self.decay_steps > 0:
+            return [self.min_lr * base_lr for base_lr in self.base_lrs]
+        else:
+            return self.base_lrs
 
 
 class LtxvTrainer:
@@ -529,7 +563,7 @@ class LtxvTrainer:
         else:
             raise ValueError(f"Unknown training mode: {self._config.model.training_mode}")
 
-        self._trainable_params = [p for p in self._transformer.parameters() if p.requires_grad]
+        self._trainable_params = [p for p in self._transformer.parameters() if p.requires_grad] + [p for p in self._action_encoder.parameters() if p.requires_grad]
         logger.debug(f"Trainable params count: {sum(p.numel() for p in self._trainable_params):,}")
 
     def _init_timestep_sampler(self) -> None:
@@ -685,11 +719,22 @@ class LtxvTrainer:
             return None
 
         if scheduler_type == "linear":
-            scheduler = LinearLR(
+            # scheduler = LinearLR(
+            #     optimizer,
+            #     start_factor=params.pop("start_factor", 1.0),
+            #     end_factor=params.pop("end_factor", 0.1),
+            #     total_iters=steps,
+            #     **params,
+            # )
+            if steps < 1000:
+                warmup_steps = min(10, steps)
+            decay_steps = max(0, steps - warmup_steps)
+            scheduler = WarmupConstantCosineDecayLR(
                 optimizer,
-                start_factor=params.pop("start_factor", 1.0),
-                end_factor=params.pop("end_factor", 0.1),
-                total_iters=steps,
+                warmup_steps=warmup_steps,
+                min_lr=self._config.optimization.learning_rate / 10,
+                constant_steps=0,
+                decay_steps=decay_steps,
                 **params,
             )
         elif scheduler_type == "cosine":

@@ -57,7 +57,7 @@ class ShiftedLogitNormalTimestepSampler:
     where the shift is determined by the sequence length.
     """
 
-    def __init__(self, std: float = 1.0):
+    def __init__(self, std: float = 2.0):
         self.std = std
 
     def sample(self, batch_size: int, seq_length: int, device: torch.device = None) -> torch.Tensor:
