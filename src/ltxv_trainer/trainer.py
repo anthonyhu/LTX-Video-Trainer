@@ -115,7 +115,7 @@ class WarmupConstantCosineDecayLR(_LRScheduler):
         super().__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        step = self.last_epoch + 2
+        step = self.last_epoch
 
         if step < self.warmup_steps:
             return [base_lr * step / self.warmup_steps for base_lr in self.base_lrs]
@@ -126,7 +126,7 @@ class WarmupConstantCosineDecayLR(_LRScheduler):
             cosine_decay = 0.5 * (1 + math.cos(math.pi * decay_step / self.decay_steps))
             return [self.min_lr + (base_lr - self.min_lr) * cosine_decay for base_lr in self.base_lrs]
         elif self.decay_steps > 0:
-            return [self.min_lr * base_lr for base_lr in self.base_lrs]
+            return [self.min_lr for _ in self.base_lrs]
         else:
             return self.base_lrs
 
@@ -726,6 +726,8 @@ class LtxvTrainer:
             #     total_iters=steps,
             #     **params,
             # )
+            warmup_steps = 1000
+            steps = steps * self._config.optimization.gradient_accumulation_steps
             if steps < 1000:
                 warmup_steps = min(10, steps)
             decay_steps = max(0, steps - warmup_steps)
