@@ -445,7 +445,8 @@ class LtxvTrainer:
         device = batch['latents']['latents'].device
         batch_size = batch['latents']['latents'].shape[0]
         num_frames = batch['latents']['num_frames'][0]
-        batch["conditions"]["prompt_embeds"] = self._action_encoder.action_dropout_token.view(1, 1, -1).repeat(batch_size, num_frames, 1)
+        action_encoder = self._accelerator.unwrap_model(self._action_encoder)
+        batch["conditions"]["prompt_embeds"] = action_encoder.action_dropout_token.view(1, 1, -1).repeat(batch_size, num_frames, 1)
         batch["conditions"]["prompt_attention_mask"] = torch.ones((batch_size, num_frames), dtype=torch.bool, device=device)
 
         # Use strategy to prepare the training batch
