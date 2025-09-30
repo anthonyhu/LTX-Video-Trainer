@@ -64,7 +64,7 @@ validation:
   video_dims: [512, 288, 73] # [width, height, frames]
   seed: 42
   inference_steps: 50
-  interval: 200 # Set to null to disable validation
+  interval: 50 # Set to null to disable validation
   videos_per_prompt: 1
   guidance_scale: 1.0
 

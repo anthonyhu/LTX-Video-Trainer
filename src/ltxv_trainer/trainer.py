@@ -148,6 +148,9 @@ class LtxvTrainer:
         self._training_strategy = get_training_strategy(self._config.conditioning)
 
     def inference(self):
+        from glob import glob
+        inference_video_folder = sorted(glob("/mnt/home/anthony/datasets/cs2/train_288x512_small/*.mp4"))
+
         device = self._accelerator.device
         cfg = self._config
         set_seed(cfg.seed)
@@ -164,8 +167,10 @@ class LtxvTrainer:
             TextColumn("ETA:"),
             TimeRemainingColumn(compact=True),
         )
+        live = Live(Panel(sample_progress), refresh_per_second=2)
 
-        sampled_videos = self._sample_videos(sample_progress)
+        with live:
+            self._sample_videos(sample_progress, inference_video_folder=inference_video_folder)
 
     def train(  # noqa: PLR0912, PLR0915
         self,
@@ -262,7 +267,7 @@ class LtxvTrainer:
             if cfg.validation.interval and IS_MAIN_PROCESS and not cfg.validation.skip_initial_validation:
                 sampled_videos = self._sample_videos(sample_progress)
                 if len(sampled_videos) > 0 and self._config.wandb.log_validation_videos:
-                    self._log_validation_videos(sampled_videos, cfg.validation.prompts)
+                    self._log_validation_videos(sampled_videos)
             self._accelerator.wait_for_everyone()
 
             for step in range(cfg.optimization.steps * cfg.optimization.gradient_accumulation_steps):
@@ -310,7 +315,7 @@ class LtxvTrainer:
                     ):
                         sampled_videos = self._sample_videos(sample_progress)
                         if len(sampled_videos) > 0 and self._config.wandb.log_validation_videos:
-                            self._log_validation_videos(sampled_videos, cfg.validation.prompts)
+                            self._log_validation_videos(sampled_videos)
 
                     # Save checkpoint if needed
                     if (
@@ -792,15 +797,17 @@ class LtxvTrainer:
 
     @torch.no_grad()
     @torch.compiler.set_stance("force_eager")
-    def _sample_videos(self, progress: Progress) -> list[Path] | None:
+    def _sample_videos(self, progress: Progress, inference_video_folder: str = None) -> list[Path] | None:
         """Run validation by generating images from validation prompts."""
         self._vae.to(self._accelerator.device)
         # Model is already in the correct device if loaded in 8-bit.
         if self._text_encoder is not None and not self._config.acceleration.load_text_encoder_in_8bit:
             self._text_encoder.to(self._accelerator.device)
 
+        validation_video_folder = self._config.validation.videos if inference_video_folder is None else inference_video_folder
+
         use_images = self._config.validation.images is not None
-        use_videos = self._config.validation.videos is not None
+        use_videos = validation_video_folder is not None
 
         pipeline = LTXConditionPipeline(
             scheduler=deepcopy(self._scheduler),
@@ -815,7 +822,7 @@ class LtxvTrainer:
         # Create a task in the sampling progress
         task = progress.add_task(
             "sampling",
-            total=len(self._config.validation.prompts),
+            total=len(validation_video_folder),
         )
 
         output_dir = Path(self._config.output_dir) / "samples"
@@ -824,8 +831,9 @@ class LtxvTrainer:
         video_paths = []
         all_videos = []
         i = 0
-        for j, prompt in enumerate(self._config.validation.prompts):
+        for j in range(len(validation_video_folder)):
             generator = torch.Generator(device=self._accelerator.device).manual_seed(self._config.validation.seed)
+            prompt = "A video of a professional gamer playing Counter Strike 2."
 
             # Generate video
             width, height, frames = self._config.validation.video_dims
@@ -853,8 +861,10 @@ class LtxvTrainer:
                 pipeline_inputs["image"] = image
 
             if use_videos:
-                cond_video_path = self._config.validation.videos[j]
+                n_context_frames = 1 + self._vae.temporal_compression_ratio * (self._config.conditioning.n_cond_latents - 1)
+                cond_video_path = validation_video_folder[j]
                 cond_video, video_fps = read_video(cond_video_path)
+                cond_video = cond_video[:n_context_frames]
                 pipeline_inputs["video"] = cond_video
                 pipeline_inputs["frame_rate"] = int(video_fps)
 
@@ -1005,15 +1015,15 @@ class LtxvTrainer:
         if self._wandb_run is not None:
             self._wandb_run.log(metrics)
 
-    def _log_validation_videos(self, videos: np.array, prompts: list[str]) -> None:
+    def _log_validation_videos(self, videos: np.array) -> None:
         """Log validation videos to Weights & Biases."""
         if not self._config.wandb.log_validation_videos or self._wandb_run is None:
             return
 
         # Create lists of videos with their captions
         validation_videos = [
-            wandb.Video(video, caption=prompt, fps=DEFAULT_FPS, format="mp4")
-            for video, prompt in zip(videos, prompts, strict=False)
+            wandb.Video(video,fps=DEFAULT_FPS, format="mp4")
+            for video in videos
         ]
 
         # Log all videos at once

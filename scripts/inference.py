@@ -29,7 +29,7 @@ app = typer.Typer(
 
 
 @app.command()
-def main(config_path: str = typer.Argument(..., help="Path to YAML configuration file")) -> None:
+def main(config_path: str = typer.Option(default="./configs/inference.yaml", help="Path to YAML configuration file")) -> None:
     """Train the model using the provided configuration file."""
     # Load the configuration from the YAML file
     config_path = Path(config_path)
